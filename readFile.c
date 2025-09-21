@@ -390,3 +390,141 @@ void liberarCodigos(char** codes){
     }
     free(codes);
 }
+
+/**
+ * @brief Descomprime un archivo que fue comprimido con el algoritmo de Huffman
+ * @param compressedFileName El nombre del archivo comprimido (.bin)
+ * @param outputFileName El nombre del archivo de salida descomprimido
+ * @return true si la descompresión fue exitosa, false en caso contrario
+ */
+bool decompressFile(const char* compressedFileName, const char* outputFileName) {
+    FILE* compressedFile = fopen(compressedFileName, "rb");
+    FILE* outputFile = fopen(outputFileName, "w");
+    
+    // Verificar que los archivos se abrieron correctamente
+    if (compressedFile == NULL) {
+        perror("Error al abrir el archivo comprimido");
+        return false;
+    }
+    if (outputFile == NULL) {
+        perror("Error al crear el archivo de salida");
+        fclose(compressedFile);
+        return false;
+    }
+    
+    // 1. Leer los metadatos del archivo
+    long long total_chars = obtenerCantidadDeCaracteres(compressedFileName);
+    if (total_chars <= 0) {
+        fprintf(stderr, "Error: Cantidad de caracteres inválida\n");
+        fclose(compressedFile);
+        fclose(outputFile);
+        return false;
+    }
+    
+    // 2. Reconstruir los códigos de Huffman
+    char** huffman_codes = reconstruirCodigos(compressedFileName);
+    if (huffman_codes == NULL) {
+        fprintf(stderr, "Error: No se pudieron reconstruir los códigos\n");
+        fclose(compressedFile);
+        fclose(outputFile);
+        return false;
+    }
+    
+    // 3. Crear el árbol de decodificación inverso
+    struct treeNode* decodingTree = createDecodingTree(huffman_codes);
+    if (decodingTree == NULL) {
+        fprintf(stderr, "Error: No se pudo crear el árbol de decodificación\n");
+        liberarCodigos(huffman_codes);
+        fclose(compressedFile);
+        fclose(outputFile);
+        return false;
+    }
+    
+    // 4. Posicionarse al inicio de los datos comprimidos
+    long offset = sizeof(long long) + 256 * sizeof(unsigned long long);
+    fseek(compressedFile, offset, SEEK_SET);
+    
+    // 5. Decodificar bit por bit
+    struct treeNode* currentNode = decodingTree;
+    long long chars_decoded = 0;
+    int byte;
+    
+    while (chars_decoded < total_chars && (byte = fgetc(compressedFile)) != EOF) {
+        // Procesar cada bit del byte (de izquierda a derecha)
+        for (int bit_pos = 7; bit_pos >= 0 && chars_decoded < total_chars; bit_pos--) {
+            // Extraer el bit en la posición bit_pos
+            int bit = (byte >> bit_pos) & 1;
+            
+            // Navegar por el árbol
+            if (bit == 0) {
+                currentNode = currentNode->left;
+            } else {
+                currentNode = currentNode->right;
+            }
+            
+            // Si llegamos a una hoja, encontramos un carácter
+            if (currentNode->left == NULL && currentNode->right == NULL) {
+                fputc(currentNode->value, outputFile);
+                chars_decoded++;
+                currentNode = decodingTree; // Volver a la raíz
+            }
+        }
+    }
+    
+    // 6. Limpieza
+    liberarCodigos(huffman_codes);
+    freeTree(decodingTree);
+    fclose(compressedFile);
+    fclose(outputFile);
+    
+    printf("Descompresión completada: %lld caracteres decodificados\n", chars_decoded);
+    return true;
+}
+
+/**
+ * @brief Crea un árbol de decodificación a partir de los códigos de Huffman
+ * @param huffman_codes Array de códigos de Huffman
+ * @return Puntero a la raíz del árbol de decodificación, o NULL si hay error
+ */
+
+struct treeNode* createDecodingTree(char** huffman_codes) {
+    struct treeNode* root = createNode('$', 0); // Nodo raíz interno
+    if (root == NULL) {
+        return NULL;
+    }
+    
+    // Para cada carácter que tiene código
+    for (int i = 0; i < 256; i++) {
+        if (huffman_codes[i] != NULL) {
+            char* code = huffman_codes[i];
+            struct treeNode* currentNode = root;
+            
+            // Navegar/crear el camino en el árbol según el código
+            for (int j = 0; code[j] != '\0'; j++) {
+                if (code[j] == '0') {
+                    //izquierda
+                    if (currentNode->left == NULL) {
+                        currentNode->left = createNode('$', 0); //temporal
+                    }
+                    currentNode = currentNode->left;
+                } else if (code[j] == '1') {
+                    //derecha
+                    if (currentNode->right == NULL) {
+                        currentNode->right = createNode('$', 0); //temporal
+                    }
+                    currentNode = currentNode->right;
+                } else {
+                    // Código inválido
+                    fprintf(stderr, "Error: Código inválido encontrado\n");
+                    freeTree(root);
+                    return NULL;
+                }
+            }
+            
+            // Al final del código, establecer el carácter en la hoja
+            currentNode->value = (unsigned char)i;
+        }
+    }
+    
+    return root;
+}

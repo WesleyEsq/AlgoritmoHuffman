@@ -39,5 +39,7 @@ bool obtenerTablaDeFrecuencias(const char* fileName, unsigned long long* frequen
 long long obtenerCantidadDeCaracteres(const char* fileName);
 void compressFile(const char *inputFileName, const char* outputFileName);
 struct letter* terribleSort();
+bool decompressFile(const char* compressedFileName, const char* outputFileName);
+struct treeNode* createDecodingTree(char** huffman_codes);
 
 #endif // TREE_H
