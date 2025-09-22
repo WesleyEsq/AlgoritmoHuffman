@@ -58,10 +58,9 @@ int main() {
         return 1;
     }
 
-    // Agregar después de la prueba individual:
     printf("\n=== PRUEBA DE COMPRESIÓN DE DIRECTORIO ===\n");
 
-    const char* test_dir = "./test_files";  // Crea una carpeta con algunos archivos .txt
+    const char* test_dir = "./test_files"; 
     const char* compressed_dir = "directorio_comprimido.bin";
 
     listFilesToCompress(test_dir);
@@ -70,6 +69,25 @@ int main() {
         printf("¡Directorio comprimido exitosamente!\n");
     } else {
         printf("Error al comprimir el directorio\n");
+    }
+
+    printf("\n=== ANÁLISIS DEL ARCHIVO COMPRIMIDO ===\n");
+    listCompressedDirectoryContents(compressed_dir);
+
+    printf("\n=== PRUEBA DE DESCOMPRESIÓN DE DIRECTORIO ===\n");
+    const char* output_dir = "./test_files_extracted";
+
+    if (decompressDirectory(compressed_dir, output_dir)) {
+        printf("¡Directorio descomprimido exitosamente!\n");
+        printf("\nPuedes comparar:\n");
+        printf("  Directorio original: %s\n", test_dir);
+        printf("  Directorio extraído: %s\n", output_dir);
+        printf("\nComandos para verificar:\n");
+        printf("  ls -la %s\n", test_dir);
+        printf("  ls -la %s\n", output_dir);
+        printf("  diff -r %s %s\n", test_dir, output_dir);
+    } else {
+        printf("Error al descomprimir el directorio\n");
     }
 
     printf("\n=== PRUEBA COMPLETADA ===\n");

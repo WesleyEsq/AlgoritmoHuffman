@@ -701,3 +701,213 @@ void listFilesToCompress(const char* inputDir) {
     closedir(dir);
     printf("===============================\n\n");
 }
+
+/**
+ * @brief Crea un directorio si no existe
+ * @param dirPath Ruta del directorio a crear
+ * @return true si el directorio existe o fue creado exitosamente, false en caso contrario
+ */
+bool createDirectoryIfNotExists(const char* dirPath) {
+    struct stat st = {0};
+    
+    // Verificar si el directorio ya existe
+    if (stat(dirPath, &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+            return true; // El directorio ya existe
+        } else {
+            fprintf(stderr, "Error: '%s' existe pero no es un directorio\n", dirPath);
+            return false;
+        }
+    }
+    
+    // Crear el directorio con permisos 755
+    if (mkdir(dirPath, 0755) == 0) {
+        printf("Directorio creado: %s\n", dirPath);
+        return true;
+    } else {
+        perror("Error al crear directorio");
+        return false;
+    }
+}
+
+/**
+ * @brief Descomprime un archivo de directorio comprimido y recrea la estructura original
+ * @param compressedFile Archivo binario que contiene el directorio comprimido
+ * @param outputDir Directorio donde se extraerán los archivos
+ * @return true si la descompresión fue exitosa, false en caso contrario
+ */
+bool decompressDirectory(const char* compressedFile, const char* outputDir) {
+    FILE* input;
+    int fileCount;
+    
+    // Abrir el archivo comprimido
+    input = fopen(compressedFile, "rb");
+    if (input == NULL) {
+        perror("Error al abrir el archivo comprimido");
+        return false;
+    }
+    
+    // Crear el directorio de salida si no existe
+    if (!createDirectoryIfNotExists(outputDir)) {
+        fclose(input);
+        return false;
+    }
+    
+    // Leer el número de archivos
+    if (fread(&fileCount, sizeof(int), 1, input) != 1) {
+        fprintf(stderr, "Error al leer el número de archivos\n");
+        fclose(input);
+        return false;
+    }
+    
+    printf("Descomprimiendo %d archivos en: %s\n", fileCount, outputDir);
+    
+    // Procesar cada archivo
+    for (int i = 0; i < fileCount; i++) {
+        // 1. Leer longitud del nombre del archivo
+        int nameLength;
+        if (fread(&nameLength, sizeof(int), 1, input) != 1) {
+            fprintf(stderr, "Error al leer la longitud del nombre del archivo %d\n", i + 1);
+            fclose(input);
+            return false;
+        }
+        
+        // Verificar que la longitud sea razonable
+        if (nameLength <= 0 || nameLength > 1000) {
+            fprintf(stderr, "Error: Longitud de nombre inválida: %d\n", nameLength);
+            fclose(input);
+            return false;
+        }
+        
+        // 2. Leer nombre del archivo
+        char fileName[1024];
+        if (fread(fileName, sizeof(char), nameLength, input) != nameLength) {
+            fprintf(stderr, "Error al leer el nombre del archivo %d\n", i + 1);
+            fclose(input);
+            return false;
+        }
+        fileName[nameLength] = '\0'; // Asegurar terminación de string
+        
+        // 3. Leer tamaño del archivo comprimido
+        long long compressedSize;
+        if (fread(&compressedSize, sizeof(long long), 1, input) != 1) {
+            fprintf(stderr, "Error al leer el tamaño comprimido del archivo: %s\n", fileName);
+            fclose(input);
+            return false;
+        }
+        
+        printf("Descomprimiendo archivo %d/%d: %s (%lld bytes comprimidos)\n", 
+               i + 1, fileCount, fileName, compressedSize);
+        
+        // 4. Crear archivo temporal con los datos comprimidos
+        char tempCompressedFile[1024];
+        snprintf(tempCompressedFile, sizeof(tempCompressedFile), "/tmp/temp_extract_%d.bin", i);
+        
+        FILE* tempFile = fopen(tempCompressedFile, "wb");
+        if (tempFile == NULL) {
+            fprintf(stderr, "Error al crear archivo temporal: %s\n", tempCompressedFile);
+            fclose(input);
+            return false;
+        }
+        
+        // 5. Copiar datos comprimidos al archivo temporal
+        char buffer[4096];
+        long long bytesRemaining = compressedSize;
+        
+        while (bytesRemaining > 0) {
+            size_t bytesToRead = (bytesRemaining < sizeof(buffer)) ? bytesRemaining : sizeof(buffer);
+            size_t bytesRead = fread(buffer, 1, bytesToRead, input);
+            
+            if (bytesRead == 0) {
+                fprintf(stderr, "Error al leer datos comprimidos del archivo: %s\n", fileName);
+                fclose(tempFile);
+                fclose(input);
+                remove(tempCompressedFile);
+                return false;
+            }
+            
+            fwrite(buffer, 1, bytesRead, tempFile);
+            bytesRemaining -= bytesRead;
+        }
+        
+        fclose(tempFile);
+        
+        // 6. Descomprimir el archivo temporal al directorio de salida
+        char outputFilePath[1024];
+        snprintf(outputFilePath, sizeof(outputFilePath), "%s/%s", outputDir, fileName);
+        
+        if (!decompressFile(tempCompressedFile, outputFilePath)) {
+            fprintf(stderr, "Error al descomprimir el archivo: %s\n", fileName);
+            remove(tempCompressedFile);
+            fclose(input);
+            return false;
+        }
+        
+        // 7. Limpiar archivo temporal
+        remove(tempCompressedFile);
+        
+        printf("  ✓ %s descomprimido exitosamente\n", fileName);
+    }
+    
+    fclose(input);
+    
+    printf("\n¡Descompresión de directorio completada!\n");
+    printf("Archivos extraídos: %d\n", fileCount);
+    printf("Directorio de salida: %s\n", outputDir);
+    
+    return true;
+}
+
+/**
+ * @brief Lista el contenido de un archivo de directorio comprimido (función auxiliar para debugging)
+ * @param compressedFile Archivo comprimido a analizar
+ */
+void listCompressedDirectoryContents(const char* compressedFile) {
+    FILE* input = fopen(compressedFile, "rb");
+    if (input == NULL) {
+        perror("Error al abrir el archivo comprimido");
+        return;
+    }
+    
+    int fileCount;
+    if (fread(&fileCount, sizeof(int), 1, input) != 1) {
+        fprintf(stderr, "Error al leer el número de archivos\n");
+        fclose(input);
+        return;
+    }
+    
+    printf("=== Contenido del archivo comprimido: %s ===\n", compressedFile);
+    printf("Número de archivos: %d\n", fileCount);
+    
+    for (int i = 0; i < fileCount; i++) {
+        // Leer longitud del nombre
+        int nameLength;
+        if (fread(&nameLength, sizeof(int), 1, input) != 1) {
+            fprintf(stderr, "Error al leer longitud del nombre\n");
+            break;
+        }
+        
+        // Leer nombre
+        char fileName[1024];
+        if (fread(fileName, sizeof(char), nameLength, input) != nameLength) {
+            fprintf(stderr, "Error al leer nombre del archivo\n");
+            break;
+        }
+        fileName[nameLength] = '\0';
+        
+        // Leer tamaño comprimido
+        long long compressedSize;
+        if (fread(&compressedSize, sizeof(long long), 1, input) != 1) {
+            fprintf(stderr, "Error al leer tamaño comprimido\n");
+            break;
+        }
+        
+        printf("  %d. %s (%lld bytes comprimidos)\n", i + 1, fileName, compressedSize);
+        
+        // Saltar los datos comprimidos
+        fseek(input, compressedSize, SEEK_CUR);
+    }
+    
+    fclose(input);
+    printf("========================================\n\n");
+}

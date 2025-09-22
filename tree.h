@@ -44,5 +44,8 @@ struct treeNode* createDecodingTree(char** huffman_codes);
 bool compressDirectory(const char* inputDir, const char* outputFile);
 void listFilesToCompress(const char* inputDir);
 bool isRegularFile(const char* filepath);
+bool decompressDirectory(const char* compressedFile, const char* outputDir);
+bool createDirectoryIfNotExists(const char* dirPath);
+void listCompressedDirectoryContents(const char* compressedFile);
 
 #endif // TREE_H
