@@ -48,4 +48,12 @@ bool decompressDirectory(const char* compressedFile, const char* outputDir);
 bool createDirectoryIfNotExists(const char* dirPath);
 void listCompressedDirectoryContents(const char* compressedFile);
 
+//para fork
+long long getCurrentTimeMs();
+void printProcessInfo(const char* message);
+int countFilesInDirectory(const char* inputDir);
+
+bool compressDirectoryFork(const char* inputDir, const char* outputFile);
+bool decompressDirectoryFork(const char* compressedFile, const char* outputDir);
+
 #endif // TREE_H
