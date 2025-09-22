@@ -1,140 +1,316 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <math.h>
-#include <unistd.h>     // Para getpid()
-#include <sys/types.h>  // Para pid_t (opcional, pero recomendado)
+#include <string.h>
+#include <getopt.h>
+#include <unistd.h>
 #include "tree.h"
 
-int main() {
+// Estructura para opciones de línea de comandos
+typedef struct {
+    char* input_dir;
+    char* output_file;
+    char* extract_dir;
+    bool compress_only;
+    bool decompress_only;
+    bool verbose;
+    bool benchmark;
+    bool help;
+} Options;
+
+void printUsage(const char* program_name) {
+    printf("Uso: %s [OPCIONES]\n", program_name);
+    printf("\nCompresión y descompresión de directorios usando el algoritmo de Huffman (Versión Fork)\n");
+    printf("\nOpciones:\n");
+    printf("  -d, --directory DIR     Directorio a comprimir\n");
+    printf("  -o, --output FILE       Archivo de salida comprimido (.bin)\n");
+    printf("  -x, --extract DIR       Directorio donde extraer archivos\n");
+    printf("  -c, --compress-only     Solo comprimir (no descomprimir)\n");
+    printf("  -u, --decompress-only   Solo descomprimir (especificar -o como entrada)\n");
+    printf("  -b, --benchmark         Comparar rendimiento con versión serial\n");
+    printf("  -v, --verbose           Mostrar información detallada del proceso\n");
+    printf("  -h, --help              Mostrar esta ayuda\n");
+    printf("\nEjemplos:\n");
+    printf("  %s -d ./textos -o archivo.bin -x ./extraidos\n", program_name);
+    printf("  %s -d ./textos -o archivo.bin -c -v\n", program_name);
+    printf("  %s -o archivo.bin -x ./extraidos -u\n", program_name);
+    printf("  %s -d ./textos -o archivo.bin -b\n", program_name);
+    printf("\n");
+}
+
+Options parseArguments(int argc, char* argv[]) {
+    Options opts = {0};
+    
+    // Opciones por defecto
+    opts.input_dir = "./test_files";
+    opts.output_file = "compressed_fork.bin";
+    opts.extract_dir = "./extracted_fork";
+    opts.compress_only = false;
+    opts.decompress_only = false;
+    opts.verbose = false;
+    opts.benchmark = false;
+    opts.help = false;
+    
+    static struct option long_options[] = {
+        {"directory", required_argument, 0, 'd'},
+        {"output", required_argument, 0, 'o'},
+        {"extract", required_argument, 0, 'x'},
+        {"compress-only", no_argument, 0, 'c'},
+        {"decompress-only", no_argument, 0, 'u'},
+        {"benchmark", no_argument, 0, 'b'},
+        {"verbose", no_argument, 0, 'v'},
+        {"help", no_argument, 0, 'h'},
+        {0, 0, 0, 0}
+    };
+    
+    int c;
+    while ((c = getopt_long(argc, argv, "d:o:x:cubvh", long_options, NULL)) != -1) {
+        switch (c) {
+            case 'd':
+                opts.input_dir = optarg;
+                break;
+            case 'o':
+                opts.output_file = optarg;
+                break;
+            case 'x':
+                opts.extract_dir = optarg;
+                break;
+            case 'c':
+                opts.compress_only = true;
+                break;
+            case 'u':
+                opts.decompress_only = true;
+                break;
+            case 'b':
+                opts.benchmark = true;
+                break;
+            case 'v':
+                opts.verbose = true;
+                break;
+            case 'h':
+                opts.help = true;
+                break;
+            case '?':
+                fprintf(stderr, "Opción desconocida. Use -h para ayuda.\n");
+                exit(1);
+                break;
+        }
+    }
+    
+    return opts;
+}
+
+int main(int argc, char* argv[]) {
+    Options opts = parseArguments(argc, argv);
+    
+    if (opts.help) {
+        printUsage(argv[0]);
+        return 0;
+    }
+    
     printf("=== ALGORITMO DE HUFFMAN - VERSIÓN PARALELA CON FORK() ===\n");
-    printf("PID del proceso principal: %d\n\n", getpid());
+    printf("PID del proceso principal: %d\n", getpid());
     
-    // Configuración de archivos de prueba
-    const char* test_dir = "./test_files";
-    const char* compressed_dir_serial = "directorio_serial.bin";
-    const char* compressed_dir_fork = "directorio_fork.bin";
-    const char* output_dir_serial = "./test_files_serial";
-    const char* output_dir_fork = "./test_files_fork";
-    
-    // Declaración de todas las variables de tiempo
-    long long start_serial, end_serial;
-    long long start_fork, end_fork;
-    long long time_fork_compress, time_fork_decomp;
-    long long time_serial_decomp;
-    
-    // Mostrar archivos a procesar
-    printf("=== ARCHIVOS A PROCESAR ===\n");
-    listFilesToCompress(test_dir);
-    
-    // ========================================================================
-    // COMPARACIÓN: VERSIÓN SERIAL vs VERSIÓN FORK
-    // ========================================================================
-    
-    printf("=== PRUEBA 1: COMPRESIÓN SERIAL ===\n");
-    start_serial = getCurrentTimeMs();
-    
-    if (compressDirectory(test_dir, compressed_dir_serial)) {
-        end_serial = getCurrentTimeMs();
-        long long time_serial = end_serial - start_serial;
-        printf("✓ Compresión serial completada en: %lld ms\n", time_serial);
-    } else {
-        printf("✗ Error en compresión serial\n");
-        return 1;
+    if (opts.verbose) {
+        printf("\nConfiguración:\n");
+        printf("  Directorio de entrada: %s\n", opts.input_dir);
+        printf("  Archivo comprimido: %s\n", opts.output_file);
+        printf("  Directorio de extracción: %s\n", opts.extract_dir);
+        printf("  Solo comprimir: %s\n", opts.compress_only ? "Sí" : "No");
+        printf("  Solo descomprimir: %s\n", opts.decompress_only ? "Sí" : "No");
+        printf("  Modo benchmark: %s\n", opts.benchmark ? "Sí" : "No");
+        printf("\n");
     }
     
-    printf("\n=== PRUEBA 2: COMPRESIÓN CON FORK() ===\n");
-    start_fork = getCurrentTimeMs();
+    // Variables para medición de tiempo
+    long long fork_compress_time = 0, fork_decompress_time = 0;
+    long long serial_compress_time = 0, serial_decompress_time = 0;
     
-    if (compressDirectoryFork(test_dir, compressed_dir_fork)) {
-        end_fork = getCurrentTimeMs();
-        time_fork_compress = end_fork - start_fork;
-        printf("✓ Compresión con fork() completada en: %lld ms\n", time_fork_compress);
+    // MODO BENCHMARK: Comparar con versión serial
+    if (opts.benchmark && !opts.decompress_only) {
+        printf("=== BENCHMARK: COMPARANDO CON VERSIÓN SERIAL ===\n");
         
-        // Calcular aceleración
-        if (time_fork_compress > 0) {
-            double speedup_compress = (double)(end_serial - start_serial) / (double)time_fork_compress;
-            printf("🚀 Aceleración en compresión: %.2fx\n", speedup_compress);
-        }
-    } else {
-        printf("✗ Error en compresión con fork()\n");
-        return 1;
-    }
-    
-    // ========================================================================
-    // DESCOMPRESIÓN: SERIAL vs FORK
-    // ========================================================================
-    
-    printf("\n=== PRUEBA 3: DESCOMPRESIÓN SERIAL ===\n");
-    start_serial = getCurrentTimeMs();
-    
-    if (decompressDirectory(compressed_dir_serial, output_dir_serial)) {
-        end_serial = getCurrentTimeMs();
-        time_serial_decomp = end_serial - start_serial;
-        printf("✓ Descompresión serial completada en: %lld ms\n", time_serial_decomp);
-    } else {
-        printf("✗ Error en descompresión serial\n");
-        return 1;
-    }
-    
-    printf("\n=== PRUEBA 4: DESCOMPRESIÓN CON FORK() ===\n");
-    start_fork = getCurrentTimeMs();
-    
-    if (decompressDirectoryFork(compressed_dir_fork, output_dir_fork)) {
-        end_fork = getCurrentTimeMs();
-        time_fork_decomp = end_fork - start_fork;
-        printf("✓ Descompresión con fork() completada en: %lld ms\n", time_fork_decomp);
+        // Crear archivos temporales para la comparación
+        char serial_output[256];
+        snprintf(serial_output, sizeof(serial_output), "%s_serial_temp.bin", opts.output_file);
         
-        // Calcular aceleración
-        if (time_fork_decomp > 0) {
-            double speedup_decomp = (double)time_serial_decomp / (double)time_fork_decomp;
-            printf("🚀 Aceleración en descompresión: %.2fx\n", speedup_decomp);
+        if (opts.verbose) {
+            listFilesToCompress(opts.input_dir);
         }
-    } else {
-        printf("✗ Error en descompresión con fork()\n");
-        return 1;
+        
+        // Prueba serial
+        printf("\n--- Ejecutando versión SERIAL ---\n");
+        long long start = getCurrentTimeMs();
+        if (compressDirectory(opts.input_dir, serial_output)) {
+            long long end = getCurrentTimeMs();
+            serial_compress_time = end - start;
+            printf("✓ Compresión serial: %lld ms\n", serial_compress_time);
+        } else {
+            printf("✗ Error en compresión serial\n");
+        }
+        
+        // Prueba fork
+        printf("\n--- Ejecutando versión FORK() ---\n");
+        start = getCurrentTimeMs();
+        if (compressDirectoryFork(opts.input_dir, opts.output_file)) {
+            long long end = getCurrentTimeMs();
+            fork_compress_time = end - start;
+            printf("✓ Compresión fork: %lld ms\n", fork_compress_time);
+        } else {
+            printf("✗ Error en compresión fork\n");
+        }
+        
+        // Limpiar archivo temporal
+        remove(serial_output);
+        
+    } else if (!opts.decompress_only) {
+        // SOLO COMPRESIÓN CON FORK
+        if (opts.verbose) {
+            printf("=== ARCHIVOS A COMPRIMIR ===\n");
+            listFilesToCompress(opts.input_dir);
+        }
+        
+        printf("\n=== COMPRESIÓN CON FORK() ===\n");
+        long long start = getCurrentTimeMs();
+        
+        if (compressDirectoryFork(opts.input_dir, opts.output_file)) {
+            long long end = getCurrentTimeMs();
+            fork_compress_time = end - start;
+            printf("✓ Compresión completada en: %lld ms\n", fork_compress_time);
+            
+            if (opts.verbose) {
+                printf("\nInformación del archivo comprimido:\n");
+                listCompressedDirectoryContents(opts.output_file);
+            }
+        } else {
+            printf("✗ Error en la compresión\n");
+            return 1;
+        }
     }
     
-    // ========================================================================
-    // VERIFICACIÓN DE INTEGRIDAD
-    // ========================================================================
+    // FASE DE DESCOMPRESIÓN
+    if (!opts.compress_only) {
+        if (opts.benchmark) {
+            printf("\n=== BENCHMARK: DESCOMPRESIÓN ===\n");
+            
+            // Crear directorios temporales para la comparación
+            char serial_extract[256];
+            snprintf(serial_extract, sizeof(serial_extract), "%s_serial_temp", opts.extract_dir);
+            
+            // Prueba serial
+            printf("\n--- Ejecutando descompresión SERIAL ---\n");
+            long long start = getCurrentTimeMs();
+            if (decompressDirectory(opts.output_file, serial_extract)) {
+                long long end = getCurrentTimeMs();
+                serial_decompress_time = end - start;
+                printf("✓ Descompresión serial: %lld ms\n", serial_decompress_time);
+            } else {
+                printf("✗ Error en descompresión serial\n");
+            }
+            
+            // Prueba fork
+            printf("\n--- Ejecutando descompresión FORK() ---\n");
+            start = getCurrentTimeMs();
+            if (decompressDirectoryFork(opts.output_file, opts.extract_dir)) {
+                long long end = getCurrentTimeMs();
+                fork_decompress_time = end - start;
+                printf("✓ Descompresión fork: %lld ms\n", fork_decompress_time);
+            } else {
+                printf("✗ Error en descompresión fork\n");
+            }
+            
+            // Verificar que ambos métodos produzcan el mismo resultado
+            char diff_cmd[512];
+            snprintf(diff_cmd, sizeof(diff_cmd), "diff -r %s %s > /dev/null 2>&1", 
+                    serial_extract, opts.extract_dir);
+            if (system(diff_cmd) == 0) {
+                printf("✓ Ambas versiones producen resultados idénticos\n");
+            } else {
+                printf("⚠ Las versiones producen resultados diferentes\n");
+            }
+            
+            // Limpiar directorio temporal
+            char rm_cmd[256];
+            snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf %s", serial_extract);
+            system(rm_cmd);
+            
+        } else {
+            // SOLO DESCOMPRESIÓN CON FORK
+            printf("\n=== DESCOMPRESIÓN CON FORK() ===\n");
+            long long start = getCurrentTimeMs();
+            
+            if (decompressDirectoryFork(opts.output_file, opts.extract_dir)) {
+                long long end = getCurrentTimeMs();
+                fork_decompress_time = end - start;
+                printf("✓ Descompresión completada en: %lld ms\n", fork_decompress_time);
+            } else {
+                printf("✗ Error en la descompresión\n");
+                return 1;
+            }
+        }
+    }
     
-    printf("\n=== VERIFICACIÓN DE INTEGRIDAD ===\n");
-    printf("Para verificar que ambas versiones producen los mismos resultados:\n");
-    printf("1. Comparar archivos comprimidos:\n");
-    printf("   diff %s %s\n", compressed_dir_serial, compressed_dir_fork);
-    printf("   (Pueden diferir debido al orden de procesamiento)\n\n");
-    
-    printf("2. Comparar directorios descomprimidos:\n");
-    printf("   diff -r %s %s\n", output_dir_serial, output_dir_fork);
-    printf("   (Deberían ser idénticos)\n\n");
-    
-    printf("3. Comparar con directorio original:\n");
-    printf("   diff -r %s %s\n", test_dir, output_dir_serial);
-    printf("   diff -r %s %s\n", test_dir, output_dir_fork);
-    printf("   (Ambos deberían ser idénticos al original)\n\n");
-    
-    // ========================================================================
     // RESUMEN DE RENDIMIENTO
-    // ========================================================================
+    printf("\n=== RESUMEN DE RENDIMIENTO ===\n");
     
-    printf("=== RESUMEN DE RENDIMIENTO ===\n");
-    printf("Compresión serial:    %lld ms\n", end_serial - start_serial);
-    printf("Compresión fork():    %lld ms\n", time_fork_compress);
-    printf("Descompresión serial: %lld ms\n", time_serial_decomp);
-    printf("Descompresión fork(): %lld ms\n", time_fork_decomp);
-    
-    // Calcular aceleraciones totales
-    long long total_serial = (end_serial - start_serial) + time_serial_decomp;
-    long long total_fork = time_fork_compress + time_fork_decomp;
-    
-    if (total_fork > 0) {
-        double total_speedup = (double)total_serial / (double)total_fork;
-        printf("\nTiempo total serial:  %lld ms\n", total_serial);
-        printf("Tiempo total fork():  %lld ms\n", total_fork);
-        printf("🚀 Aceleración total: %.2fx\n", total_speedup);
+    if (opts.benchmark) {
+        printf("COMPRESIÓN:\n");
+        if (serial_compress_time > 0 && fork_compress_time > 0) {
+            printf("  Serial: %lld ms\n", serial_compress_time);
+            printf("  Fork:   %lld ms\n", fork_compress_time);
+            double speedup = (double)serial_compress_time / (double)fork_compress_time;
+            printf("  Aceleración: %.2fx\n", speedup);
+        }
+        
+        printf("\nDESCOMPRESIÓN:\n");
+        if (serial_decompress_time > 0 && fork_decompress_time > 0) {
+            printf("  Serial: %lld ms\n", serial_decompress_time);
+            printf("  Fork:   %lld ms\n", fork_decompress_time);
+            double speedup = (double)serial_decompress_time / (double)fork_decompress_time;
+            printf("  Aceleración: %.2fx\n", speedup);
+        }
+        
+        printf("\nTOTAL:\n");
+        long long total_serial = serial_compress_time + serial_decompress_time;
+        long long total_fork = fork_compress_time + fork_decompress_time;
+        if (total_serial > 0 && total_fork > 0) {
+            printf("  Serial: %lld ms\n", total_serial);
+            printf("  Fork:   %lld ms\n", total_fork);
+            double total_speedup = (double)total_serial / (double)total_fork;
+            printf("  🚀 Aceleración total: %.2fx\n", total_speedup);
+        }
+    } else {
+        if (fork_compress_time > 0) {
+            printf("Tiempo de compresión:   %lld ms\n", fork_compress_time);
+        }
+        if (fork_decompress_time > 0) {
+            printf("Tiempo de descompresión: %lld ms\n", fork_decompress_time);
+        }
+        printf("Tiempo total:           %lld ms\n", fork_compress_time + fork_decompress_time);
     }
     
-    printf("\n=== PRUEBAS COMPLETADAS ===\n");
+    // VERIFICACIÓN DE INTEGRIDAD
+    if (!opts.compress_only && !opts.decompress_only && !opts.benchmark) {
+        printf("\n=== VERIFICACIÓN DE INTEGRIDAD ===\n");
+        printf("Para verificar que los archivos son idénticos:\n");
+        printf("  diff -r %s %s\n", opts.input_dir, opts.extract_dir);
+        printf("  (No debería mostrar diferencias)\n");
+    }
+    
+    printf("\n=== PROCESO COMPLETADO ===\n");
+    
+    if (opts.verbose) {
+        printf("\nArchivos generados:\n");
+        if (!opts.decompress_only) {
+            printf("  Archivo comprimido: %s\n", opts.output_file);
+        }
+        if (!opts.compress_only) {
+            printf("  Directorio extraído: %s\n", opts.extract_dir);
+        }
+        printf("\nInformación de procesos:\n");
+        printf("  PID principal: %d\n", getpid());
+        printf("  Procesos hijos creados durante la ejecución\n");
+    }
+    
     return 0;
 }
