@@ -61,7 +61,7 @@ int main() {
     printf("\n=== PRUEBA DE COMPRESIÓN DE DIRECTORIO ===\n");
 
     const char* test_dir = "./test_files"; 
-    const char* compressed_dir = "directorio_comprimido.bin";
+    const char* compressed_dir = "test_files.bin";
 
     listFilesToCompress(test_dir);
 
