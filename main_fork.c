@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
+#include <unistd.h>     // Para getpid()
+#include <sys/types.h>  // Para pid_t (opcional, pero recomendado)
 #include "tree.h"
 
 int main() {
@@ -15,6 +17,12 @@ int main() {
     const char* output_dir_serial = "./test_files_serial";
     const char* output_dir_fork = "./test_files_fork";
     
+    // Declaración de todas las variables de tiempo
+    long long start_serial, end_serial;
+    long long start_fork, end_fork;
+    long long time_fork_compress, time_fork_decomp;
+    long long time_serial_decomp;
+    
     // Mostrar archivos a procesar
     printf("=== ARCHIVOS A PROCESAR ===\n");
     listFilesToCompress(test_dir);
@@ -24,10 +32,10 @@ int main() {
     // ========================================================================
     
     printf("=== PRUEBA 1: COMPRESIÓN SERIAL ===\n");
-    long long start_serial = getCurrentTimeMs();
+    start_serial = getCurrentTimeMs();
     
     if (compressDirectory(test_dir, compressed_dir_serial)) {
-        long long end_serial = getCurrentTimeMs();
+        end_serial = getCurrentTimeMs();
         long long time_serial = end_serial - start_serial;
         printf("✓ Compresión serial completada en: %lld ms\n", time_serial);
     } else {
@@ -36,11 +44,11 @@ int main() {
     }
     
     printf("\n=== PRUEBA 2: COMPRESIÓN CON FORK() ===\n");
-    long long start_fork = getCurrentTimeMs();
+    start_fork = getCurrentTimeMs();
     
     if (compressDirectoryFork(test_dir, compressed_dir_fork)) {
-        long long end_fork = getCurrentTimeMs();
-        long long time_fork_compress = end_fork - start_fork;
+        end_fork = getCurrentTimeMs();
+        time_fork_compress = end_fork - start_fork;
         printf("✓ Compresión con fork() completada en: %lld ms\n", time_fork_compress);
         
         // Calcular aceleración
@@ -62,7 +70,7 @@ int main() {
     
     if (decompressDirectory(compressed_dir_serial, output_dir_serial)) {
         end_serial = getCurrentTimeMs();
-        long long time_serial_decomp = end_serial - start_serial;
+        time_serial_decomp = end_serial - start_serial;
         printf("✓ Descompresión serial completada en: %lld ms\n", time_serial_decomp);
     } else {
         printf("✗ Error en descompresión serial\n");
@@ -74,7 +82,7 @@ int main() {
     
     if (decompressDirectoryFork(compressed_dir_fork, output_dir_fork)) {
         end_fork = getCurrentTimeMs();
-        long long time_fork_decomp = end_fork - start_fork;
+        time_fork_decomp = end_fork - start_fork;
         printf("✓ Descompresión con fork() completada en: %lld ms\n", time_fork_decomp);
         
         // Calcular aceleración
