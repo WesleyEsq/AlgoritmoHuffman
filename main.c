@@ -58,6 +58,20 @@ int main() {
         return 1;
     }
 
+    // Agregar después de la prueba individual:
+    printf("\n=== PRUEBA DE COMPRESIÓN DE DIRECTORIO ===\n");
+
+    const char* test_dir = "./test_files";  // Crea una carpeta con algunos archivos .txt
+    const char* compressed_dir = "directorio_comprimido.bin";
+
+    listFilesToCompress(test_dir);
+
+    if (compressDirectory(test_dir, compressed_dir)) {
+        printf("¡Directorio comprimido exitosamente!\n");
+    } else {
+        printf("Error al comprimir el directorio\n");
+    }
+
     printf("\n=== PRUEBA COMPLETADA ===\n");
     return 0;
 }
