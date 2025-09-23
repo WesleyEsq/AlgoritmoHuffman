@@ -1,7 +1,7 @@
 # Makefile para el Proyecto de Compresión Huffman
 # Compilador y flags
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -O2
+CFLAGS = -Wall -Wextra -std=gnu99 -O2
 LDFLAGS = -lm
 
 # Archivos fuente comunes

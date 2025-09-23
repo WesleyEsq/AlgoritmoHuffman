@@ -182,7 +182,6 @@ bool compressDirectoryFork(const char* inputDir, const char* outputFile) {
     
     // Combinar todos los archivos temporales
     for (int i = 0; i < fileCount; i++) {
-        // Escribir metadata del archivo
         int nameLength = strlen(fileNames[i]);
         fwrite(&nameLength, sizeof(int), 1, output);
         fwrite(fileNames[i], sizeof(char), nameLength, output);
@@ -208,7 +207,7 @@ bool compressDirectoryFork(const char* inputDir, const char* outputFile) {
         }
         
         fclose(tempFile);
-        remove(tempFiles[i]); // Limpiar archivo temporal
+        remove(tempFiles[i]);
         
         printf("Archivo combinado: %s (%lld bytes)\n", fileNames[i], compressedSize);
     }
@@ -272,7 +271,6 @@ bool decompressDirectoryFork(const char* compressedFile, const char* outputDir) 
     
     // Extraer todos los archivos comprimidos a archivos temporales
     for (int i = 0; i < fileCount; i++) {
-        // Leer metadata
         int nameLength;
         fread(&nameLength, sizeof(int), 1, input);
         fread(fileNames[i], sizeof(char), nameLength, input);

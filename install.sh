@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script de instalación automática para el Proyecto de Compresión Huffman
+# Script de instalación automática para el Proyecto
 # Compatible con Debian/Ubuntu
 
 set -e  # Salir si algún comando falla
@@ -310,7 +310,7 @@ run_manual_demo() {
     
     # Solicitar directorio de entrada
     while true; do
-        echo -n "📁 Ingrese el directorio a comprimir [./test_files]: "
+        echo -n "Ingrese el directorio a comprimir [./test_files]: "
         read input_dir
         
         # Usar valor por defecto si está vacío
@@ -333,14 +333,14 @@ run_manual_demo() {
     echo ""
     
     # Solicitar archivo de salida
-    echo -n "💾 Nombre del archivo comprimido [mi_compresion.bin]: "
+    echo -n "Nombre del archivo comprimido [mi_compresion.bin]: "
     read output_file
     if [ -z "$output_file" ]; then
         output_file="mi_compresion.bin"
     fi
     
     # Solicitar directorio de extracción
-    echo -n "📂 Directorio donde extraer [./extraidos]: "
+    echo -n "Directorio donde extraer [./extraidos]: "
     read extract_dir
     if [ -z "$extract_dir" ]; then
         extract_dir="./extraidos"
@@ -356,7 +356,7 @@ run_manual_demo() {
     echo ""
     
     while true; do
-        echo -n "🚀 Seleccione la versión a usar [1]: "
+        echo -n " Seleccione la versión a usar [1]: "
         read version_choice
         
         if [ -z "$version_choice" ]; then
@@ -422,9 +422,9 @@ run_manual_demo() {
     print_success "Configuración manual completada exitosamente"
     echo ""
     echo "Archivos generados:"
-    echo "  📁 Directorio original: $input_dir"
-    echo "  💾 Archivo comprimido: $output_file"
-    echo "  📂 Directorio extraído: $extract_dir"
+    echo "   Directorio original: $input_dir"
+    echo "   Archivo comprimido: $output_file"
+    echo "   Directorio extraído: $extract_dir"
 }
 
 # Menú de opciones post-instalación
@@ -436,9 +436,9 @@ post_installation_menu() {
     echo ""
     echo "¿Qué desea hacer ahora?"
     echo ""
-    echo "1) 🎮 Ejecutar demo automática (usar archivos de prueba creados)"
-    echo "2) ⚙️  Configuración manual (elegir sus propios directorios)"
-    echo "3) ❌ Salir (solo instalar, no ejecutar demo)"
+    echo "1)  Ejecutar demo automática (usar archivos de prueba creados)"
+    echo "2)  Configuración manual (elegir sus propios directorios)"
+    echo "3)  Salir (solo instalar, no ejecutar demo)"
     echo ""
     
     while true; do
