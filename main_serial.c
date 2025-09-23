@@ -175,14 +175,6 @@ int main(int argc, char* argv[]) {
     }
     printf("Tiempo total:           %lld ms\n", total_time);
     
-    // VERIFICACIÓN DE INTEGRIDAD
-    if (!opts.compress_only && !opts.decompress_only) {
-        printf("\n=== VERIFICACIÓN DE INTEGRIDAD ===\n");
-        printf("Para verificar que los archivos son idénticos:\n");
-        printf("  diff -r %s %s\n", opts.input_dir, opts.extract_dir);
-        printf("  (No debería mostrar diferencias)\n");
-    }
-    
     printf("\n=== PROCESO COMPLETADO ===\n");
     
     if (opts.verbose) {
