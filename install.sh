@@ -199,19 +199,19 @@ compile_project() {
         
         # Compilar versión serial
         if [ -f "main_serial.c" ]; then
-            gcc -Wall -Wextra -std=c99 -O2 -o huffman_serial main_serial.c readFile.c tree.c -lm
+            gcc -Wall -Wextra -std=gnu99 -O2 -o huffman_serial main_serial.c readFile.c tree.c -lm
             print_success "Versión serial compilada"
         fi
         
         # Compilar versión fork
         if [ -f "main_fork.c" ] && [ -f "readFile_fork.c" ]; then
-            gcc -Wall -Wextra -std=c99 -O2 -o huffman_fork main_fork.c readFile.c readFile_fork.c tree.c -lm
+            gcc -Wall -Wextra -std=gnu99 -O2 -o huffman_fork main_fork.c readFile.c readFile_fork.c tree.c -lm
             print_success "Versión fork compilada"
         fi
         
         # Compilar versión pthread si existe
         if [ -f "main_pthread.c" ] && [ -f "readFile_pthread.c" ]; then
-            gcc -Wall -Wextra -std=c99 -O2 -o huffman_pthread main_pthread.c readFile.c readFile_pthread.c tree.c -lm -lpthread
+            gcc -Wall -Wextra -std=gnu99 -O2 -o huffman_pthread main_pthread.c readFile.c readFile_pthread.c tree.c -lm -lpthread
             print_success "Versión pthread compilada"
         fi
     fi
@@ -239,64 +239,259 @@ setup_test_files() {
 }
 
 # Ejecutar pruebas básicas
-run_tests() {
-    print_status "Ejecutando pruebas básicas..."
+run_basic_tests() {
+    print_status "Ejecutando pruebas básicas de compilación..."
     
-    # Probar versión serial
+    # Probar versión serial (prueba rápida)
     if [ -f "huffman_serial" ]; then
-        print_status "Probando versión serial..."
-        ./huffman_serial -d test_files -o test_serial.bin -x test_serial_out -v
+        ./huffman_serial -h > /dev/null 2>&1
         if [ $? -eq 0 ]; then
-            print_success "Versión serial: OK"
+            print_success "Versión serial: Compilación OK"
         else
             print_error "Versión serial: FALLO"
         fi
     fi
     
-    # Probar versión fork
+    # Probar versión fork (prueba rápida)
     if [ -f "huffman_fork" ]; then
-        print_status "Probando versión fork..."
-        ./huffman_fork -d test_files -o test_fork.bin -x test_fork_out -v
+        ./huffman_fork -h > /dev/null 2>&1
         if [ $? -eq 0 ]; then
-            print_success "Versión fork: OK"
+            print_success "Versión fork: Compilación OK"
         else
             print_error "Versión fork: FALLO"
         fi
     fi
+}
+
+# Ejecutar demo automática
+run_automatic_demo() {
+    print_status "Ejecutando demo automática con archivos de prueba..."
+    
+    # Probar versión serial
+    if [ -f "huffman_serial" ]; then
+        print_status "Probando versión serial..."
+        ./huffman_serial -d test_files -o demo_serial.bin -x demo_serial_out -v
+        if [ $? -eq 0 ]; then
+            print_success "Demo serial: OK"
+        else
+            print_error "Demo serial: FALLO"
+        fi
+    fi
+    
+    # Probar versión fork
+    if [ -f "huffman_fork" ]; then
+        print_status "Probando versión fork con benchmark..."
+        ./huffman_fork -d test_files -o demo_fork.bin -x demo_fork_out -b
+        if [ $? -eq 0 ]; then
+            print_success "Demo fork: OK"
+        else
+            print_error "Demo fork: FALLO"
+        fi
+    fi
     
     # Verificar integridad
-    if [ -d "test_files" ] && [ -d "test_serial_out" ]; then
-        if diff -r test_files test_serial_out > /dev/null 2>&1; then
+    if [ -d "test_files" ] && [ -d "demo_serial_out" ]; then
+        if diff -r test_files demo_serial_out > /dev/null 2>&1; then
             print_success "Verificación de integridad: OK"
         else
             print_warning "Verificación de integridad: Diferencias encontradas"
         fi
     fi
+    
+    echo ""
+    print_success "Demo automática completada exitosamente"
+}
+
+# Ejecutar configuración manual
+run_manual_demo() {
+    echo ""
+    print_status "=== CONFIGURACIÓN MANUAL ==="
+    echo ""
+    
+    # Solicitar directorio de entrada
+    while true; do
+        echo -n "📁 Ingrese el directorio a comprimir [./test_files]: "
+        read input_dir
+        
+        # Usar valor por defecto si está vacío
+        if [ -z "$input_dir" ]; then
+            input_dir="./test_files"
+        fi
+        
+        # Verificar que el directorio existe
+        if [ -d "$input_dir" ]; then
+            break
+        else
+            print_error "El directorio '$input_dir' no existe. Inténtelo de nuevo."
+        fi
+    done
+    
+    # Mostrar archivos en el directorio
+    echo ""
+    print_status "Archivos encontrados en '$input_dir':"
+    ls -la "$input_dir" | grep -v "^d" | awk '{print "  • " $9}' | grep -v "^  • $"
+    echo ""
+    
+    # Solicitar archivo de salida
+    echo -n "💾 Nombre del archivo comprimido [mi_compresion.bin]: "
+    read output_file
+    if [ -z "$output_file" ]; then
+        output_file="mi_compresion.bin"
+    fi
+    
+    # Solicitar directorio de extracción
+    echo -n "📂 Directorio donde extraer [./extraidos]: "
+    read extract_dir
+    if [ -z "$extract_dir" ]; then
+        extract_dir="./extraidos"
+    fi
+    
+    # Preguntar qué versión usar
+    echo ""
+    echo "Versiones disponibles:"
+    [ -f "huffman_serial" ] && echo "  1) Serial (secuencial)"
+    [ -f "huffman_fork" ] && echo "  2) Fork (paralelo con procesos)"
+    [ -f "huffman_pthread" ] && echo "  3) Pthread (paralelo con hilos)"
+    echo "  4) Comparar serial vs fork"
+    echo ""
+    
+    while true; do
+        echo -n "🚀 Seleccione la versión a usar [1]: "
+        read version_choice
+        
+        if [ -z "$version_choice" ]; then
+            version_choice=1
+        fi
+        
+        case $version_choice in
+            1)
+                if [ -f "huffman_serial" ]; then
+                    print_status "Ejecutando versión SERIAL..."
+                    ./huffman_serial -d "$input_dir" -o "$output_file" -x "$extract_dir" -v
+                    break
+                else
+                    print_error "huffman_serial no está disponible"
+                fi
+                ;;
+            2)
+                if [ -f "huffman_fork" ]; then
+                    print_status "Ejecutando versión FORK..."
+                    ./huffman_fork -d "$input_dir" -o "$output_file" -x "$extract_dir" -v
+                    break
+                else
+                    print_error "huffman_fork no está disponible"
+                fi
+                ;;
+            3)
+                if [ -f "huffman_pthread" ]; then
+                    print_status "Ejecutando versión PTHREAD..."
+                    ./huffman_pthread -d "$input_dir" -o "$output_file" -x "$extract_dir" -v
+                    break
+                else
+                    print_error "huffman_pthread no está disponible aún"
+                fi
+                ;;
+            4)
+                if [ -f "huffman_fork" ]; then
+                    print_status "Ejecutando COMPARACIÓN Serial vs Fork..."
+                    ./huffman_fork -d "$input_dir" -o "$output_file" -x "$extract_dir" -b
+                    break
+                else
+                    print_error "huffman_fork no está disponible para comparación"
+                fi
+                ;;
+            *)
+                print_error "Opción inválida. Seleccione 1, 2, 3 o 4."
+                ;;
+        esac
+    done
+    
+    # Verificar integridad si se hizo compresión y descompresión completa
+    if [ -d "$extract_dir" ]; then
+        echo ""
+        print_status "Verificando integridad de los archivos..."
+        if diff -r "$input_dir" "$extract_dir" > /dev/null 2>&1; then
+            print_success "✓ Los archivos son idénticos al original"
+        else
+            print_warning "⚠ Se encontraron diferencias entre original y extraído"
+            echo "Para ver las diferencias: diff -r '$input_dir' '$extract_dir'"
+        fi
+    fi
+    
+    echo ""
+    print_success "Configuración manual completada exitosamente"
+    echo ""
+    echo "Archivos generados:"
+    echo "  📁 Directorio original: $input_dir"
+    echo "  💾 Archivo comprimido: $output_file"
+    echo "  📂 Directorio extraído: $extract_dir"
+}
+
+# Menú de opciones post-instalación
+post_installation_menu() {
+    echo ""
+    echo "=== INSTALACIÓN COMPLETADA EXITOSAMENTE ==="
+    echo ""
+    print_success "El proyecto ha sido compilado y está listo para usar"
+    echo ""
+    echo "¿Qué desea hacer ahora?"
+    echo ""
+    echo "1) 🎮 Ejecutar demo automática (usar archivos de prueba creados)"
+    echo "2) ⚙️  Configuración manual (elegir sus propios directorios)"
+    echo "3) ❌ Salir (solo instalar, no ejecutar demo)"
+    echo ""
+    
+    while true; do
+        echo -n "Seleccione una opción [1]: "
+        read choice
+        
+        if [ -z "$choice" ]; then
+            choice=1
+        fi
+        
+        case $choice in
+            1)
+                run_automatic_demo
+                break
+                ;;
+            2)
+                run_manual_demo
+                break
+                ;;
+            3)
+                print_status "Instalación completada. Use los ejecutables cuando guste."
+                break
+                ;;
+            *)
+                print_error "Opción inválida. Seleccione 1, 2 o 3."
+                ;;
+        esac
+    done
 }
 
 # Mostrar información final
 show_final_info() {
     echo ""
-    echo "=== INSTALACIÓN COMPLETADA ==="
-    echo ""
-    print_success "El proyecto ha sido instalado y compilado correctamente"
+    echo "=== INFORMACIÓN DEL PROYECTO ==="
     echo ""
     echo "Ejecutables disponibles:"
     [ -f "huffman_serial" ] && echo "  • huffman_serial  - Versión serial"
     [ -f "huffman_fork" ] && echo "  • huffman_fork    - Versión paralela con fork()"
     [ -f "huffman_pthread" ] && echo "  • huffman_pthread - Versión concurrente con pthread()"
     echo ""
-    echo "Comandos útiles:"
+    echo "Comandos útiles para después:"
     echo "  make help         - Mostrar ayuda del Makefile"
     echo "  make test         - Ejecutar pruebas automáticas"
     echo "  make benchmark    - Pruebas de rendimiento"
     echo "  make clean        - Limpiar archivos generados"
     echo ""
-    echo "Ejemplos de uso:"
-    echo "  ./huffman_serial -d ./textos -o comprimido.bin -x extraidos"
-    echo "  ./huffman_fork -d ./textos -o comprimido.bin -b  # Con benchmark"
+    echo "Ejemplos de uso manual:"
+    echo "  ./huffman_serial -d ./mis_textos -o mi_archivo.bin -x ./extraidos"
+    echo "  ./huffman_fork -d ./mis_textos -o mi_archivo.bin -b  # Con benchmark"
+    echo "  ./huffman_serial -h  # Ver todas las opciones"
     echo ""
-    print_success "¡Listo para usar!"
+    print_success "¡Proyecto listo para usar!"
+    echo ""
 }
 
 # Función principal
@@ -311,7 +506,11 @@ main() {
     verify_build_tools
     compile_project
     setup_test_files
-    run_tests
+    run_basic_tests
+    
+    # Menú post-instalación
+    post_installation_menu
+    
     show_final_info
 }
 
