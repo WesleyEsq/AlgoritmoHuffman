@@ -1,164 +1,147 @@
+// Archivo: main_pthread.c
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <stdbool.h>
-#include <sys/stat.h> 
-#include <time.h>     
-
-// Incluimos el header con todas nuestras funciones
+#include <string.h>
+#include <getopt.h>
 #include "tree.h"
+#include <time.h>
 
-// --- Prototipos de funciones del menú ---
-void clearScreen();
-void printHeader(const char* title);
-int getMenuChoice();
-long long getCurrentTimeMs(); // Para benchmarking
 
-// --- Función Principal ---
-int main() {
-    char inputPath[1024];
-    char outputPath[1024];
-    bool isInputDirectory = false;
+// Estructura para opciones de línea de comandos
+typedef struct {
+    char* input_dir;
+    char* output_file;
+    char* extract_dir;
+    bool compress_only;
+    bool decompress_only;
+    bool benchmark;
+    bool help;
+} Options;
 
-    while (true) {
-        // --- ETAPA 1: SELECCIONAR ENTRADA ---
-        clearScreen();
-        printHeader("ETAPA 1: SELECCIONAR ARCHIVO O DIRECTORIO");
-        printf("Introduce la ruta del archivo o directorio a procesar.\n");
-        printf("Escribe 'salir' para terminar el programa.\n\n");
-        printf("Ruta: ");
-
-        if (fgets(inputPath, sizeof(inputPath), stdin) == NULL) continue;
-        inputPath[strcspn(inputPath, "\n")] = 0;
-
-        if (strcmp(inputPath, "salir") == 0) break;
-
-        struct stat path_stat;
-        if (stat(inputPath, &path_stat) != 0) {
-            printf("\nError: La ruta '%s' no existe. Presiona Enter para intentar de nuevo.", inputPath);
-            getchar();
-            continue;
-        }
-        isInputDirectory = S_ISDIR(path_stat.st_mode);
-        
-        printf("\nEntrada detectada como: %s\n", isInputDirectory ? "DIRECTORIO" : "ARCHIVO");
-        printf("Presiona Enter para continuar...");
-        getchar();
-
-        // --- ETAPA 2: COMPRIMIR O DESCOMPRIMIR ---
-        int actionChoice = 0;
-        while (true) {
-            clearScreen();
-            printHeader("ETAPA 2: ELEGIR ACCIÓN");
-            printf("Entrada seleccionada: %s\n\n", inputPath);
-            printf("1. Comprimir\n");
-            printf("2. Descomprimir\n");
-            printf("--------------------\n");
-            printf("9. Volver (elegir otra ruta)\n");
-            printf("0. Salir del programa\n\n");
-            printf("Opción: ");
-            
-            actionChoice = getMenuChoice();
-            if (actionChoice == 1 || actionChoice == 2 || actionChoice == 9 || actionChoice == 0) break;
-            printf("\nOpción no válida. Presiona Enter para intentar de nuevo.");
-            getchar();
-        }
-
-        if (actionChoice == 9) continue;
-        if (actionChoice == 0) break;
-
-        // --- ETAPA 3: ELEGIR ALGORITMO ---
-        int algoChoice = 0;
-        while (true) {
-            clearScreen();
-            printHeader("ETAPA 3: ELEGIR MÉTODO");
-            printf("Entrada: %s (%s)\n", inputPath, isInputDirectory ? "Directorio" : "Archivo");
-            printf("Acción: %s\n\n", actionChoice == 1 ? "Comprimir" : "Descomprimir");
-            printf("1. Serial (Secuencial)\n");
-            printf("2. Fork (Procesos Paralelos)\n");
-            printf("3. Pthread (Hilos Paralelos)\n");
-            printf("--------------------\n");
-            printf("9. Volver (elegir otra acción)\n");
-            printf("0. Salir del programa\n\n");
-            printf("Opción: ");
-
-            algoChoice = getMenuChoice();
-            if ((algoChoice >= 1 && algoChoice <= 3) || algoChoice == 9 || algoChoice == 0) break;
-            printf("\nOpción no válida. Presiona Enter para intentar de nuevo.");
-            getchar();
-        }
-
-        if (algoChoice == 9) continue;
-        if (algoChoice == 0) break;
-
-        // --- RESUMEN Y EJECUCIÓN ---
-        clearScreen();
-        printHeader("INICIANDO OPERACIÓN");
-        
-        // Definir nombre de salida
-        if (actionChoice == 1) snprintf(outputPath, sizeof(outputPath), "%s.huff", inputPath);
-        else snprintf(outputPath, sizeof(outputPath), "%s_descomprimido", inputPath);
-        
-        printf("  - Entrada: %s\n", inputPath);
-        printf("  - Salida:  %s\n", outputPath);
-        printf("  - Método:  %s\n\n", algoChoice == 1 ? "Serial" : (algoChoice == 2 ? "Fork" : "Pthread"));
-        
-        long long start_time = getCurrentTimeMs();
-
-        if (actionChoice == 1) { // COMPRIMIR
-            if (isInputDirectory) {
-                if (algoChoice == 1) compressDirectory(inputPath, outputPath);
-                if (algoChoice == 2) compressDirectoryFork(inputPath, outputPath);
-                if (algoChoice == 3) compressDirectoryPthread(inputPath, outputPath);
-            } else {
-                // Para archivos individuales, usamos la versión paralela que es segura
-                compressFileParallel(inputPath, outputPath);
-            }
-        } else { // DESCOMPRIMIR
-             if (isInputDirectory) {
-                if (algoChoice == 1) decompressDirectory(inputPath, outputPath);
-                if (algoChoice == 2) decompressDirectoryFork(inputPath, outputPath);
-                if (algoChoice == 3) decompressDirectoryPthread(inputPath, outputPath);
-            } else {
-                decompressFile(inputPath, outputPath);
-            }
-        }
-
-        long long end_time = getCurrentTimeMs();
-        printf("\n--------------------------------------------\n");
-        printf("✓ Operación completada en %lld ms\n", end_time - start_time);
-        printf("--------------------------------------------\n");
-        printf("\nPresiona Enter para volver al menú principal.");
-        getchar();
-    }
-
-    clearScreen();
-    printf("¡Hasta luego!\n");
-    return 0;
+void printUsage(const char* program_name) {
+    printf("Uso: %s [OPCIONES]\n", program_name);
+    printf("\nCompresión y descompresión con Pthreads\n");
+    printf("  -d, --directory DIR     Directorio a comprimir\n");
+    printf("  -o, --output FILE       Archivo de salida (.bin)\n");
+    printf("  -x, --extract DIR       Directorio donde extraer\n");
+    printf("  -c, --compress-only     Solo comprimir\n");
+    printf("  -u, --decompress-only   Solo descomprimir\n");
+    printf("  -b, --benchmark         Comparar con la versión serial\n");
+    printf("  -h, --help              Mostrar esta ayuda\n");
 }
 
-// --- Implementación de Funciones Auxiliares ---
-
-void clearScreen() {
-    system("clear || cls");
-}
-
-void printHeader(const char* title) {
-    printf("============================================\n");
-    printf("    COMPRESOR HUFFMAN - MENÚ INTERACTIVO\n");
-    printf("--------------------------------------------\n");
-    printf(":: %s\n", title);
-    printf("============================================\n\n");
-}
-
-int getMenuChoice() {
-    char buffer[10];
-    if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
-        return atoi(buffer);
-    }
-    return -1;
-}
-
+/**
+ * @brief Mide el tiempo actual en milisegundos.
+ * @return Tiempo actual en milisegundos.
+ */
 long long getCurrentTimeMs() {
     return (long long)((double)clock() * 1000 / CLOCKS_PER_SEC);
+}
+
+
+Options parseArguments(int argc, char* argv[]) {
+    Options opts = {0};
+    opts.input_dir = "./test_files";
+    opts.output_file = "compressed_pthread.bin";
+    opts.extract_dir = "./extracted_pthread";
+
+    static struct option long_options[] = {
+        {"directory", required_argument, 0, 'd'},
+        {"output", required_argument, 0, 'o'},
+        {"extract", required_argument, 0, 'x'},
+        {"compress-only", no_argument, 0, 'c'},
+        {"decompress-only", no_argument, 0, 'u'},
+        {"benchmark", no_argument, 0, 'b'},
+        {"help", no_argument, 0, 'h'},
+        {0, 0, 0, 0}
+    };
+
+    int c;
+    while ((c = getopt_long(argc, argv, "d:o:x:cubh", long_options, NULL)) != -1) {
+        switch (c) {
+            case 'd': opts.input_dir = optarg; break;
+            case 'o': opts.output_file = optarg; break;
+            case 'x': opts.extract_dir = optarg; break;
+            case 'c': opts.compress_only = true; break;
+            case 'u': opts.decompress_only = true; break;
+            case 'b': opts.benchmark = true; break;
+            case 'h': opts.help = true; break;
+            default: exit(1);
+        }
+    }
+    return opts;
+}
+
+int main(int argc, char* argv[]) {
+    Options opts = parseArguments(argc, argv);
+
+    if (opts.help) {
+        printUsage(argv[0]);
+        return 0;
+    }
+
+    printf("=== ALGORITMO DE HUFFMAN - VERSIÓN PTHREAD ===\n");
+
+    long long pthread_compress_time = 0, serial_compress_time = 0;
+    long long pthread_decompress_time = 0, serial_decompress_time = 0;
+
+    // --- FASE DE COMPRESIÓN ---
+    if (!opts.decompress_only) {
+        if (opts.benchmark) {
+            printf("\n--- BENCHMARK: Ejecutando versión SERIAL ---\n");
+            long long start = getCurrentTimeMs();
+            compressDirectory(opts.input_dir, "temp_serial.bin");
+            long long end = getCurrentTimeMs();
+            serial_compress_time = end - start;
+            printf("✓ Compresión serial: %lld ms\n", serial_compress_time);
+        }
+        
+        printf("\n--- Ejecutando versión PTHREAD ---\n");
+        long long start = getCurrentTimeMs();
+        compressDirectoryPthread(opts.input_dir, opts.output_file);
+        long long end = getCurrentTimeMs();
+        pthread_compress_time = end - start;
+        printf("✓ Compresión con Pthread: %lld ms\n", pthread_compress_time);
+    }
+
+    // --- FASE DE DESCOMPRESIÓN ---
+    // (Asumiendo que decompressDirectoryPthread existe)
+    if (!opts.compress_only) {
+         if (opts.benchmark) {
+            printf("\n--- BENCHMARK: Ejecutando descompresión SERIAL ---\n");
+            long long start = getCurrentTimeMs();
+            decompressDirectory(opts.output_file, "temp_extracted_serial");
+            long long end = getCurrentTimeMs();
+            serial_decompress_time = end - start;
+            printf("✓ Descompresión serial: %lld ms\n", serial_decompress_time);
+        }
+
+        printf("\n--- Ejecutando descompresión PTHREAD ---\n");
+        long long start = getCurrentTimeMs();
+        decompressDirectoryPthread(opts.output_file, opts.extract_dir);
+        long long end = getCurrentTimeMs();
+        pthread_decompress_time = end - start;
+        printf("✓ Descompresión con Pthread: %lld ms\n", pthread_decompress_time);
+    }
+    
+    // --- RESUMEN DE RENDIMIENTO ---
+    if (opts.benchmark) {
+        printf("\n=== RESUMEN DE RENDIMIENTO ===\n");
+        if(serial_compress_time > 0 && pthread_compress_time > 0){
+            printf("Compresión:\n");
+            printf("  Serial: %lld ms\n", serial_compress_time);
+            printf("  Pthread: %lld ms\n", pthread_compress_time);
+            printf("  Aceleración: %.2fx\n", (double)serial_compress_time / pthread_compress_time);
+        }
+        if(serial_decompress_time > 0 && pthread_decompress_time > 0){
+            printf("Descompresión:\n");
+            printf("  Serial: %lld ms\n", serial_decompress_time);
+            printf("  Pthread: %lld ms\n", pthread_decompress_time);
+            printf("  Aceleración: %.2fx\n", (double)serial_decompress_time / pthread_decompress_time);
+        }
+    }
+
+    return 0;
 }

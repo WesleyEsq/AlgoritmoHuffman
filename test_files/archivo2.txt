@@ -1,1 +1,1 @@
-Archivo de prueba con más contenido para el algoritmo de Huffman. Este texto debería comprimirse bien debido a la repetición de caracteres y palabras.
+Archivo de prueba con más contenido para el algoritmo de Huffman.

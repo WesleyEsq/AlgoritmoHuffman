@@ -15,6 +15,13 @@
 //                                                                          //
 //--------------------------------------------------------------------------//
 
+/**
+ * @brief Mide tiempo en milisegundos
+ * @return Tiempo actual en milisegundos
+ */
+long long getCurrentTimeMs() {
+    return (long long)((double)clock() * 1000 / CLOCKS_PER_SEC);
+}
 
 /**
  * @brief Imprime información del proceso

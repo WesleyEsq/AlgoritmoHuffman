@@ -79,7 +79,7 @@ int main() {
                     snprintf(command, sizeof(command), "ranger --choosefile=%s", tempFile);
                 }
                 
-                printf("\nPresiona Enter para lanzar 'ranger'...");
+                printf("\nPresiona Enter para lanzar el buscador...");
                 getchar();
                 clearScreen();
                 system(command);
@@ -126,7 +126,7 @@ int main() {
             printf("1. Serial (Secuencial)\n");
             printf("2. Fork (Procesos Paralelos)\n");
             printf("3. Pthread (Hilos Paralelos)\n");
-            printf("--------------------\n");
+            printf("-----------------------------------\n");
             printf("9. Volver\n");
             printf("0. Salir\n\n");
             printf("Opción: ");
@@ -208,8 +208,4 @@ int getMenuChoice() {
         return atoi(buffer);
     }
     return -1;
-}
-
-long long getCurrentTimeMs() {
-    return (long long)((double)clock() * 1000 / CLOCKS_PER_SEC);
 }
