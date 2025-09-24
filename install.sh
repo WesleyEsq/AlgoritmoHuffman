@@ -494,24 +494,58 @@ show_final_info() {
     echo ""
 }
 
-# Función principal
+# --- Función principal de instalación ---
 main() {
-    echo "Iniciando instalación automática..."
+    print_status "Iniciando instalación del Compresor Huffman..."
+    
+    # 1. Verificar y solicitar permisos de administrador (sudo) si es necesario
+    if [ "$EUID" -ne 0 ]; then
+        print_warning "Se necesitarán permisos de administrador para instalar dependencias."
+        sudo -v # Pide la contraseña de sudo al principio
+    fi
+    
+    # 2. Instalar dependencias necesarias
+    # Lista de paquetes requeridos
+    REQUIRED_PKGS="build-essential ranger"
+    PKGS_TO_INSTALL=""
+
+    print_status "Verificando dependencias: $REQUIRED_PKGS"
+    for pkg in $REQUIRED_PKGS; do
+        if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+            PKGS_TO_INSTALL="$PKGS_TO_INSTALL $pkg"
+        fi
+    done
+
+    if [ -n "$PKGS_TO_INSTALL" ]; then
+        print_status "Instalando paquetes faltantes: $PKGS_TO_INSTALL"
+        sudo apt-get update
+        sudo apt-get install -y $PKGS_TO_INSTALL
+    fi
+    print_success "Dependencias verificadas e instaladas."
+
+    # 3. Compilar el programa interactivo usando el Makefile
+    print_status "Compilando el programa principal (huffman_cli)..."
+    make huffman_cli
+    print_success "Compilación completada."
+
+    # 4. Crear archivos de prueba si no existen
+    if [ ! -d "test_files" ]; then
+        print_status "Creando directorio y archivos de prueba..."
+        make setup
+        print_success "Archivos de prueba creados en ./test_files/"
+    fi
+    
+    # 5. Mensaje final y ejecución del programa
     echo ""
+    echo "======================================================"
+    print_success "¡Instalación completada!"
+    echo "Se ha generado el ejecutable: ./huffman_cli"
+    echo "Iniciando el programa de menú interactivo..."
+    echo "======================================================"
+    sleep 2
     
-    check_system
-    check_permissions
-    update_system
-    install_dependencies
-    verify_build_tools
-    compile_project
-    setup_test_files
-    run_basic_tests
-    
-    # Menú post-instalación
-    post_installation_menu
-    
-    show_final_info
+    # Ejecutar el programa principal
+    ./huffman_cli
 }
 
 # Manejo de errores

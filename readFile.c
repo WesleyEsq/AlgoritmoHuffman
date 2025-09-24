@@ -27,7 +27,7 @@ void initGlobalAlphabet(){
     }
 }
 
-struct letter* initAlphabet(struct letter alphabet[256] ){
+struct letter* initAlphabet(struct letter alphabet[256]){
     for(int i = 0; i < 256; i++){
         alphabet[i].frequency = 0;
         alphabet[i].letter = i;
@@ -98,6 +98,79 @@ struct letter* terribleSort()
 
         //if(biggestYet.frequency == 0) break; Se manda el malloc usar esto
         if(resultArrayLeftIndex > 255) break;
+    }
+
+    return resultList;
+}
+
+
+
+/**
+ * @brief Obtiene las frecuencias de un archivo y las ordena de mayor a menor.
+ * Esta versión es segura para usarse en paralelo (thread-safe) porque no
+ * depende de ninguna variable global.
+ * @param filePath La ruta del archivo a procesar.
+ * @param out_size Un puntero para devolver la cantidad de caracteres únicos.
+ * @return Un puntero a una lista de 'struct letter' ordenada por frecuencia.
+ * Retorna NULL si el archivo no se puede abrir.
+ * 
+ */
+struct letter* terribleSortFromFile(const char* filePath, int* out_size) {
+    // 1. Usa un alfabeto local en lugar de uno global
+    struct letter local_alphabet[256];
+    for (int i = 0; i < 256; i++) {
+        local_alphabet[i].frequency = 0;
+        local_alphabet[i].letter = i;
+    }
+
+    // 2. Lee el archivo y cuenta las frecuencias en el alfabeto local
+    FILE *file = fopen(filePath, "r");
+    if (file == NULL) {
+        perror("Error al abrir el archivo en terribleSortFromFile");
+        return NULL; // Importante manejar el error
+    }
+
+    int charAsciiValue;
+    while ((charAsciiValue = fgetc(file)) != EOF) {
+        unsigned char character = (unsigned char)charAsciiValue;
+        local_alphabet[(int)character].frequency++;
+    }
+    fclose(file);
+
+    //
+    int amount = 0;
+    for (int i = 0; i < 256; i++) {
+        if (local_alphabet[i].frequency != 0) {
+            amount++;
+        }
+    }
+    *out_size = amount; // Devuelve el tamaño a través del puntero
+
+    struct letter* resultList = (struct letter*)malloc(amount * sizeof(struct letter));
+    if(resultList == NULL){
+        perror("Error de memoria en terribleSortFromFile");
+        return NULL;
+    }
+
+    int resultArrayLeftIndex = 0;
+    while (resultArrayLeftIndex < amount) {
+        struct letter biggestYet = { .frequency = 0, .letter = 0 };
+        int biggest_index = -1;
+
+        for (int i = 0; i < 256; i++) {
+            if (local_alphabet[i].frequency > biggestYet.frequency) {
+                biggestYet = local_alphabet[i];
+                biggest_index = i;
+            }
+        }
+
+        if (biggest_index == -1) break; 
+
+        resultList[resultArrayLeftIndex] = biggestYet;
+        resultArrayLeftIndex++;
+
+
+        local_alphabet[biggest_index].frequency = 0;
     }
 
     return resultList;
@@ -192,15 +265,123 @@ char** obtenerCodigos(const char *fileName){
     return huffman_codes;
 }
 
+char** obtenerCodigosParalel(const char *fileName){
+    int size = 0;
+    struct letter* sorted_letters = terribleSortFromFile(fileName, &size);
+    struct treeNode* huffmanRoot = buildHuffmanTree(sorted_letters, size);
+
+    //Tercero escribir los códigos de cada caracter:
+    char** huffman_codes = (char**)calloc(256, sizeof(char*));
+    char path[256] = { 0 }; //Buffer sencillo para ir escribiendo los caracteres en el algoritmo
+    generateCodes(huffmanRoot, path, 0, huffman_codes);
+
+    return huffman_codes;
+}
+
 //Para acceder al código de un caracter de un diccionario
 char* getCodeOfACharacter(char** huffmanCodes, unsigned char symbol){
     return (huffmanCodes[symbol]);
 }
 
+
+
 /**
  * @brief los parametros y el proposito de este procedimiento se explican solos.
  */
-void compressFile(const char *inputFileName, const char* outputFileName)
+void compressFile(const char *inputFileName, const char* outputFileName) {
+    FILE *inputFile = fopen(inputFileName, "r");
+    FILE *outputFile = fopen(outputFileName, "wb");
+
+    if (inputFile == NULL) {
+        perror("Error al abrir archivo de entrada");
+        return;
+    }
+    if (outputFile == NULL) {
+        perror("Error al crear archivo de salida");
+        fclose(inputFile);
+        return;
+    }
+
+    // --- Cálculo de Frecuencias  ---
+    long long total_chars = 0;
+    unsigned long long frequencies[256] = {0}; // Inicializar a cero
+    int charAsciiValue;
+
+    while ((charAsciiValue = fgetc(inputFile)) != EOF) {
+        frequencies[charAsciiValue]++;
+        total_chars++;
+    }
+
+    // --- Header para descomprimir los datos --
+    fwrite(&total_chars, sizeof(long long), 1, outputFile); //Cantidad total de caracteres a descomprimir
+    fwrite(frequencies, sizeof(unsigned long long), 256, outputFile); // Frecuencia,(para recuperar los códigos)
+
+    // --- Generar Códigos de Huffman (basado en frecuencias locales) ---
+    int unique_chars_count = 0;
+    for (int i = 0; i < 256; i++) {
+        if (frequencies[i] > 0) {
+            unique_chars_count++;
+        }
+    }
+
+    struct letter* letters = (struct letter*)malloc(unique_chars_count * sizeof(struct letter));
+    if (letters == NULL) {
+        perror("Fallo de memoria para la lista de letras");
+        fclose(inputFile); fclose(outputFile); return;
+    }
+
+    int current_index = 0;
+    for (int i = 0; i < 256; i++) {
+        if (frequencies[i] > 0) {
+            letters[current_index].letter = (unsigned char)i;
+            letters[current_index].frequency = frequencies[i];
+            current_index++;
+        }
+    }
+
+    struct treeNode* huffmanRoot = buildHuffmanTree(letters, unique_chars_count);
+    char** huffman_codes = (char**)calloc(256, sizeof(char*));
+    char path[256] = {0};
+    generateCodes(huffmanRoot, path, 0, huffman_codes);
+
+    // --- Escribir Datos Comprimidos ---
+    rewind(inputFile); // Volver al inicio del archivo de entrada para leerlo de nuevo
+    unsigned char byteBuffer = 0;
+    int bitCount = 0;
+
+    while ((charAsciiValue = fgetc(inputFile)) != EOF) {
+        char* code = huffman_codes[charAsciiValue];
+        for (int i = 0; code[i] != '\0'; i++) {
+            byteBuffer <<= 1;
+            if (code[i] == '1') {
+                byteBuffer |= 1;
+            }
+            bitCount++;
+            if (bitCount == 8) {
+                fputc(byteBuffer, outputFile);
+                bitCount = 0;
+                byteBuffer = 0;
+            }
+        }
+    }
+
+    if (bitCount > 0) {
+        byteBuffer <<= (8 - bitCount);
+        fputc(byteBuffer, outputFile);
+    }
+
+    //End, yay
+    fclose(inputFile);
+    fclose(outputFile);
+    free(letters);
+    freeTree(huffmanRoot);
+    liberarCodigos(huffman_codes); 
+}
+
+/**
+ * @brief los parametros y el proposito de este procedimiento se explican solos.
+ */
+void compressFileParalel(const char *inputFileName, const char* outputFileName)
 {
     FILE *inputFile;
     FILE *outputFile;
@@ -214,21 +395,20 @@ void compressFile(const char *inputFileName, const char* outputFileName)
     //TotalChars es la cantidad total de caracteres
     //El numero sirve para saber cuando parar con la descompresión.
     long long total_chars = 0;
-    unsigned long long frequencies[256];
-    initGlobalAlphabet();
-    readTextFile(inputFileName);
+    unsigned long long frequencies[256] = {0}; // Inicializar a cero
+    int charAsciiValue;
 
-    for(int i=0; i<256; i++){
-        frequencies[i] = alphabet[i].frequency;
-        total_chars += alphabet[i].frequency;
+    while ((charAsciiValue = fgetc(inputFile)) != EOF) {
+        frequencies[charAsciiValue]++;
+        total_chars++;
     }
 
     fwrite(&total_chars, sizeof(long long), 1, outputFile);
     fwrite(frequencies, sizeof(unsigned long long), 256, outputFile);
 
     //Ok, a escribir el archivo.
-    char** codigos = obtenerCodigos(inputFileName);
-    int charAsciiValue;//El caracter actual
+    char** codigos = obtenerCodigosParalel(inputFileName);
+
     unsigned char byteBuffer;//El caracter comprimido a escribir
     int bitCount = 0;//Contar los BITS, si, BITS que se van llenando en el char
 
@@ -261,6 +441,13 @@ void compressFile(const char *inputFileName, const char* outputFileName)
 
     fclose(inputFile);
     fclose(outputFile);
+    
+    // --- 5. Limpieza ---
+    fclose(inputFile);
+    fclose(outputFile);
+
+    // Asumiendo que tienes una función para liberar los códigos, como la que creamos antes
+    liberarCodigos(codigos); 
 }
 
 
@@ -911,3 +1098,5 @@ void listCompressedDirectoryContents(const char* compressedFile) {
     fclose(input);
     printf("========================================\n\n");
 }
+
+// OH NO ESTE ARCHIVO ES COLOSAL :(

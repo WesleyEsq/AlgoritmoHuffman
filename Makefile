@@ -2,7 +2,7 @@
 # Compilador y flags
 CC = gcc
 CFLAGS = -Wall -Wextra -std=gnu99 -O2
-LDFLAGS = -lm
+LDFLAGS = -lm -lrt
 
 # Archivos fuente comunes
 COMMON_SOURCES = tree.c readFile.c
@@ -16,14 +16,16 @@ SERIAL_TARGET = huffman_serial
 FORK_TARGET = huffman_fork
 PTHREAD_TARGET = huffman_pthread
 TEST_TARGET = huffman_test
-
+#Menu principal
+MENU_TARGET = huffman_cli
 # Directorio para archivos de prueba
 TEST_DIR = test_files
 COMPRESSED_DIR = compressed_output
 EXTRACTED_DIR = extracted_output
 
 # Regla por defecto
-all: $(SERIAL_TARGET) $(FORK_TARGET) info
+all: $(SERIAL_TARGET) $(FORK_TARGET) $(PTHREAD_TARGET) info
+full: all $(MENU_TARGET)
 
 # Información del proyecto
 info:
@@ -47,8 +49,12 @@ $(SERIAL_TARGET): main_serial.c $(COMMON_OBJECTS)
 $(FORK_TARGET): main_fork.c readFile_fork.o $(COMMON_OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-# Compilar versión pthread (cuando esté lista)
-$(PTHREAD_TARGET): main_pthread.c readFile_pthread.o $(COMMON_OBJECTS)
+# Compilar versión pthread
+$(PTHREAD_TARGET): main_pthread.c readFile_pthread.c $(COMMON_OBJECTS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) -lpthread
+
+# Compilar la aplicación 
+$(MENU_TARGET): main_menu.c readFile.o readFile_fork.o readFile_pthread.o tree.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) -lpthread
 
 # Compilar archivos objeto
@@ -114,7 +120,7 @@ clean:
 
 # Limpiar solo ejecutables
 clean-bin:
-	@rm -f $(SERIAL_TARGET) $(FORK_TARGET) $(PTHREAD_TARGET) $(TEST_TARGET)
+	@rm -f $(SERIAL_TARGET) $(FORK_TARGET) $(PTHREAD_TARGET) $(TEST_TARGET) $(PTHREAD_TARGET)
 	@echo "✓ Ejecutables eliminados"
 
 # Mostrar ayuda

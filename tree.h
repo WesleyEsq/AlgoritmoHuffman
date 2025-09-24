@@ -56,4 +56,10 @@ int countFilesInDirectory(const char* inputDir);
 bool compressDirectoryFork(const char* inputDir, const char* outputFile);
 bool decompressDirectoryFork(const char* compressedFile, const char* outputDir);
 
+
+// para pthread
+bool compressDirectoryPthread(const char* inputDir, const char* outputFile);
+bool decompressDirectoryPthread(const char* compressedFile, const char* outputDir);
+
+
 #endif // TREE_H
